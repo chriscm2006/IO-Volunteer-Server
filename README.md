@@ -3,7 +3,7 @@
 A Spring Boot app that take data from sources into HBase.
 
 ### Requires ###
-HBase running on port 8080.
+HBase running on default port.
 
 http://hbase.apache.org/0.94/book/standalone_dist.html
 
