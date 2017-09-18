@@ -14,10 +14,6 @@ http://hbase.apache.org/0.94/book/standalone_dist.html
 
 ### How to build ###
 
-1 ./gradlew build (needed to generated Avro classes)
+1 Open project in your IDE (Preferably IntelliJ Idea)
 
-2 Open the project in your IDE
-
-### How to run ###
-
-* ./gradlew bootRun
+2 Set up Gradle target to run: "./gradlew bootRun"
