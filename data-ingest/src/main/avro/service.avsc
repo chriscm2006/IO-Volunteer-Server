@@ -1,0 +1,18 @@
+{
+  "namespace": "com.moba11y.ioserver",
+  "type": "record",
+  "name": "Service",
+  "doc": "A service request made by a user of the Internation Oasis servier.",
+  "fields": [
+    {"name": "requestor", "type": "string"},
+    {"name": "description", "type": "string"},
+    {
+      "name": "category",
+      "type": {
+        "type": "enum",
+        "name": "ServiceCategory",
+        "symbols": ["FURNITURE", "RIDE_SHARE", "GAME_NIGHT", "OTHER"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+# Java Files #
+*.class
+
+# Package Files #
+# *.jar, we need to checkin gradle/wrapper/gradle-wrapper.jar
+*.war
+*.ear
+
+# Eclipse files #
+.settings
+.classpath
+.project
+.springBeans
+.checkstyle
+
+# IntelliJ files #
+.idea
+local.properties
+*.iml
+out
+
+# Gradle files #
+.gradle
+build
+test-output
+target
+logs
+ML-to-do-notes.md
+/data
+mycert.pem
+incubator
+bin
+
+# Apple files #
+.DS_Store
+
+postman-reports

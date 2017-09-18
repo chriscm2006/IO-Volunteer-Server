@@ -1,0 +1,240 @@
+def getVersionName = { ->
+    def stdout = new ByteArrayOutputStream()
+
+    exec {
+        commandLine 'git', 'describe', '--tags'
+        standardOutput = stdout
+    }
+
+    return stdout.toString().trim()
+}
+
+buildscript {
+
+    ext {
+        springBootVersion = '1.5.6.RELEASE'
+        dockerPluginVersion = '1.2'
+        springGradleDependencyPluginVersion = '1.0.3.RELEASE'
+        localMaven = project.hasProperty('local') || System.env['ECP_USE_MAVEN_LOCAL'] != null
+        buildInfoExtractVersion = '4.0.0'
+    }
+
+    repositories {
+        if (localMaven) {
+            mavenLocal()
+        }
+        maven {
+            url "${artifactory2_contextUrl}/libs-release"
+            credentials {
+                username = "${artifactory2_user}"
+                password = "${artifactory2_password}"
+            }
+        }
+
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.5.6.RELEASE")
+        classpath("se.transmode.gradle:gradle-docker:${dockerPluginVersion}")
+        classpath("io.spring.gradle:dependency-management-plugin:${springGradleDependencyPluginVersion}")
+        classpath("org.jfrog.buildinfo:build-info-extractor-gradle:${buildInfoExtractVersion}")
+        classpath("com.commercehub.gradle.plugin:gradle-avro-plugin:0.10.0")
+    }
+}
+
+subprojects {
+    ext {
+        jacksonVersion = '2.9.0'
+        lombokVersion = '1.16.18'
+        hbaseVersion = '1.3.1'
+        testngVersion = '6.9.12'
+        avroVersion = '1.8.1'
+        embeddedRedis = '0.6'
+        moxyVersion = '2.6.2'
+        jmockitVersion = '1.27'
+        keycloakVersion = '3.1.0.Final'
+        springSecurityVersion = '4.2.3.RELEASE'
+        junitVersion = '4.12'
+        assertJVersion = '3.3.0'
+        tomcatExtLogVersion = '1.6'
+        keycloakVersion = '3.1.0.Final'
+        pushDocker = System.getProperty("PUSH_DOCKER") == "true"
+        dockerRepoLocation = "agora.dequecloud.com:1080"
+        findBugsVersion = '3.0.1'
+        isRelease = "$System.env.RELEASE_BUILD".equalsIgnoreCase("true")
+        downloadRepository = isRelease? 'libs-release' : 'libs-snapshot'
+        publishRepository = isRelease? 'gradle-release-repository' : 'gradle-repository'
+    }
+
+    apply plugin: 'java'
+    apply plugin: 'eclipse'
+    apply plugin: 'idea'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'maven-publish'
+    apply plugin: 'maven'
+    apply plugin: 'findbugs'
+    apply plugin: 'pmd'
+    apply plugin: 'checkstyle'
+    apply plugin: 'jacoco'
+    apply plugin: 'docker'
+    apply plugin: "io.spring.dependency-management"
+    apply plugin: "com.jfrog.artifactory"
+    apply plugin: "com.commercehub.gradle.plugin.avro"
+
+    if (project.name == "data-ingest") {
+        apply plugin: 'war'
+        war.doFirst {
+            manifest.attributes(
+                    "Provider": "Deque System Inc.",
+                    "Build-Info": build,
+                    "Implementation-Title": project.name,
+                    "Implementation-Version": getVersionName
+            )
+        }
+
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.web
+                    artifactId war.baseName
+                    artifact sourcesJar
+                    artifact javadocJar
+                }
+            }
+        }
+    } else {
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+                    artifactId jar.baseName
+                    artifact sourcesJar
+                    artifact javadocJar
+                }
+            }
+        }
+    }
+
+    publish.dependsOn bootRepackage
+    artifactoryPublish.dependsOn bootRepackage
+
+    repositories {
+        if (project.hasProperty('local') || System.env['ECP_USE_MAVEN_LOCAL'] != null) {
+            mavenLocal()
+        }
+        maven {
+            url "${artifactory2_contextUrl}/${downloadRepository}"
+            credentials {
+                username = "${artifactory2_user}"
+                password = "${artifactory2_password}"
+            }
+        }
+    }
+
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    dependencies {
+
+    }
+
+    jar.doFirst {
+        manifest.attributes(
+                "Provider": "Deque System Inc.",
+                "Build-Info": build,
+                "Implementation-Title": project.name,
+                "Implementation-Version": getVersionName
+        )
+    }
+
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    javadoc { failOnError false }
+
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+        classifier = 'javadoc'
+        from javadoc.destinationDir
+    }
+
+    artifacts {
+        archives sourcesJar
+        archives javadocJar
+    }
+
+    artifactory {
+        contextUrl = "${artifactory2_contextUrl}" // base artifactory url
+        publish {
+            repository {
+                repoKey = "${publishRepository}"   //The Artifactory repository key to publish to
+                username = "${artifactory2_user}"
+                password = "${artifactory2_password}"
+            }
+            defaults { publications('mavenJava') }
+        }
+    }
+
+    artifactoryPublish { dependsOn jar }
+
+    def codeAnalysisConfigDir = new File("../", 'code-analysis-config')
+
+    pmd { ignoreFailures = false }
+
+    findbugs { ignoreFailures = true }
+
+    findbugsMain {
+        excludeFilter = new File(codeAnalysisConfigDir, "findbugs-filter-main.xml")
+    }
+
+    findbugsTest {
+        excludeFilter = new File(codeAnalysisConfigDir, "findbugs-filter-tests.xml")
+    }
+
+
+    checkstyle {
+        toolVersion = "7.0"
+        configFile = new File(codeAnalysisConfigDir, "checkstyle.xml")
+        configProperties.codeAnalysisConfigDir = codeAnalysisConfigDir
+        ignoreFailures = false
+    }
+
+    tasks.withType(Checkstyle).each { checkstyleTask ->
+        checkstyleTask.doLast {
+            reports.all { report ->
+                def outputFile = report.destination
+                if (outputFile.exists() && outputFile.text.contains("<error ")) {
+                    outputs.upToDateWhen { false }
+                    throw new GradleException("There were checkstyle warnings! For more info check $outputFile")
+                }
+            }
+        }
+    }
+
+
+    test {
+        jacoco {
+            append = false
+            destinationFile = file("$buildDir/jacoco/jacocoTest.exec")
+            classDumpDir = file("$buildDir/jacoco/classpathdumps")
+        }
+
+        useTestNG() { useDefaultListeners = true }
+    }
+
+    jacocoTestReport {
+        reports {
+            xml.enabled true
+            csv.enabled false
+            html.destination "${buildDir}/jacocoHtml"
+        }
+    }
+}
+
+
+
