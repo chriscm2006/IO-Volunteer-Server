@@ -3,7 +3,7 @@ repositories {
 }
 
 dependencies {
-    compile('com.github.chriscm2006:iodataobjects:5661e84b50a87dec4fc2869f8343817b3de994fb')
+    compile('com.github.chriscm2006:iodataobjects:c4a5879cb08902029b511cdf024eb1c1de99a2ca')
 
     compile("org.springframework.boot:spring-boot-starter-web")
     compile("org.projectlombok:lombok:${lombokVersion}")

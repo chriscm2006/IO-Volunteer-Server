@@ -46,7 +46,8 @@ public class ServiceController {
 
         @Override
         protected Service constructValue(Result result) {
-            return null;
+            final String jsonString = new String(result.value());
+            return (Service) GsonSerializable.fromJson(jsonString, Service.class);
         }
     }
 
@@ -73,7 +74,7 @@ public class ServiceController {
             if (findings.size() > maxRecords) {
                 findings = findings.subList(0, maxRecords);
             }
-            
+
             return ResponseEntity.ok().body(findings);
         } catch (Exception e) {
             e.printStackTrace();

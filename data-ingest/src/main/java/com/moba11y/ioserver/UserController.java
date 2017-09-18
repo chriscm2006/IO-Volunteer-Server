@@ -42,7 +42,6 @@ public class UserController {
 
         @Override
         protected User constructValue(Result result) {
-            //TODO: Make this return a newly constructed user from the result object
             final String jsonString = new String(result.value());
             return (User)GsonSerializable.fromJson(jsonString, User.class);
         }
@@ -67,7 +66,7 @@ public class UserController {
      * @return HTTP Response with findings from now since secondsBackInTime, containing
      *              now more than maxRecords Findings.
      */
-    @RequestMapping(method = RequestMethod.GET, value = "/usersDebug")
+    @RequestMapping(method = RequestMethod.GET, value = "/users")
     public ResponseEntity getUsers(@RequestParam(required = false, defaultValue = "100", value = "maxRecords") final int maxRecords) {
         try {
 
