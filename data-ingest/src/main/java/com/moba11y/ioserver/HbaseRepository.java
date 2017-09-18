@@ -1,17 +1,5 @@
 package com.moba11y.ioserver;
 
-import com.fasterxml.jackson.dataformat.avro.ser.NonBSGenericDatumWriter;
-
-import org.apache.avro.Schema;
-import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.DatumReader;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.specific.SpecificDatumReader;
-import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
@@ -19,6 +7,7 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
+import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
@@ -27,6 +16,7 @@ import org.apache.hadoop.hbase.client.Table;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -34,9 +24,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import lombok.extern.slf4j.Slf4j;
-
-public abstract class HbaseRepository<T extends SpecificRecordBase> {
+public abstract class HbaseRepository<T extends GsonSerializable> {
 
     private final String TABLE_NAME;
 
@@ -84,26 +72,15 @@ public abstract class HbaseRepository<T extends SpecificRecordBase> {
 
     CopyOnWriteArrayList<Put> mCachedPuts = new CopyOnWriteArrayList<>();
 
-    protected abstract byte[] generateRowKey(T value);
+    protected abstract Put contsructPut(T value);
 
+    protected abstract T constructValue(Result result);
 
     public void save(T value) throws IOException {
 
         final ByteArrayOutputStream stream = new ByteArrayOutputStream(1024);
 
-        final BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(stream, null);
-
-        final DatumWriter<T> writer = new NonBSGenericDatumWriter<>(value.getSchema());
-
-        writer.write(value, encoder);
-
-        encoder.flush();
-
-        Put put = new Put(generateRowKey(value));
-
-        put.add(FAMILY_NAME.getBytes(), getQualifier().getBytes(), stream.toByteArray());
-
-        mCachedPuts.add(put);
+        mCachedPuts.add(contsructPut(value));
 
         //The cache can only grow so large.
         if (mScheduledFuture != null && mCachedPuts.size() < MAX_CACHED_PUTS) {
@@ -132,29 +109,27 @@ public abstract class HbaseRepository<T extends SpecificRecordBase> {
         }
     }
 
-    public List<T> getFindings(T reusable) throws IOException {
+    public T get(final byte[] rowKey) throws IOException {
 
-        BinaryDecoder reusableDecoder = DecoderFactory.get().binaryDecoder(new byte[]{}, null);
+        try (final Table table = mHbaseConnection.getTable(tableName)) {
 
-        final DatumReader<T> reader = new SpecificDatumReader<>(reusable.getSchema());
+            Get get = new Get(rowKey);
+
+            return constructValue(table.get(get));
+        }
+    }
+
+    public List<T> getValues() throws IOException {
 
         try (final Table table = mHbaseConnection.getTable(tableName)) {
 
             final ArrayList<T> results = new ArrayList<>();
 
             for (Result result : table.getScanner(new Scan())) {
-
-                reusableDecoder = DecoderFactory.get().binaryDecoder(result.value(), reusableDecoder);
-
-                results.add(reader.read(reusable, reusableDecoder));
+                results.add(constructValue(result));
             }
 
             return results;
         }
     }
-
-    private String getQualifier() {
-        return getSchemaVersion();
-    }
-    protected abstract String getSchemaVersion();
 }

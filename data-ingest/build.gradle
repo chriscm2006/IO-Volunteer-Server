@@ -1,6 +1,10 @@
-apply plugin: "com.commercehub.gradle.plugin.avro-base"
+repositories {
+    maven { url 'https://jitpack.io' }
+}
 
 dependencies {
+    compile('com.github.chriscm2006:iodataobjects:5661e84b50a87dec4fc2869f8343817b3de994fb')
+
     compile("org.springframework.boot:spring-boot-starter-web")
     compile("org.projectlombok:lombok:${lombokVersion}")
     compile("commons-codec:commons-codec:1.10")
@@ -9,15 +13,7 @@ dependencies {
         exclude group: "org.slf4j", module: "slf4j-log4j12"
     }
     compile("com.fasterxml.jackson.core:jackson-core:${jacksonVersion}")
-    compile("org.apache.avro:avro:1.8.1")
     compile("com.fasterxml.jackson.dataformat:jackson-dataformat-avro:${jacksonVersion}")
     testCompile('org.springframework.boot:spring-boot-starter-test')
     testCompile('com.jayway.jsonpath:json-path')
 }
-
-task generateAvro(type: com.commercehub.gradle.plugin.avro.GenerateAvroJavaTask) {
-    source("src/avro")
-    outputDir = file("dest/avro")
-}
-
-compileJava.source(generateAvro.outputs)

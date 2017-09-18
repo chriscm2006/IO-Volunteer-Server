@@ -1,6 +1,10 @@
 package com.moba11y.ioserver;
 
+import com.google.gson.JsonElement;
+
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,18 +27,26 @@ public class ServiceController {
     @Repository
     private static class ServiceRepository extends HbaseRepository<Service> {
 
+        private final byte[] familyBytes = Service.class.getSimpleName().getBytes();
+
         private static volatile long rowKey = 0;
+
         ServiceRepository() {
             super(Service.class);
         }
 
         @Override
-        protected byte[] generateRowKey(Service value) {
-            return DigestUtils.md5Hex(value.getRequestor() + rowKey++).getBytes();
+        protected Put contsructPut(Service value) {
+            Put put = new Put(DigestUtils.md5Hex("" + rowKey++).getBytes());
+
+            put.addColumn(familyBytes, null, value.toJson().getBytes());
+
+            return put;
         }
 
-        protected String getSchemaVersion() {
-            return "1.0";
+        @Override
+        protected Service constructValue(Result result) {
+            return null;
         }
     }
 
@@ -46,38 +58,23 @@ public class ServiceController {
         return ResponseEntity.ok().build();
     }
 
-    @RequestMapping(method = RequestMethod.GET, value = "/service")
-    public ResponseEntity getService(@RequestParam final String email) throws IOException {
-        return ResponseEntity.ok().build();
-    }
-
     /**
      * A method that allows you to fetch a simple HTML view of a subset of findings.
      * @param maxRecords Limit the number of results sent in the request data.
      * @return HTTP Response with findings from now since secondsBackInTime, containing
      *              now more than maxRecords Findings.
      */
-    @RequestMapping(method = RequestMethod.GET, value = "/servicesDebug")
+    @RequestMapping(method = RequestMethod.GET, value = "/services")
     public ResponseEntity getUsers(@RequestParam(required = false, defaultValue = "100", value = "maxRecords") final int maxRecords) {
         try {
 
-            final long startTime = System.currentTimeMillis();
-
-            List<Service> findings = repository.getFindings(new Service());
+            List<Service> findings = repository.getValues();
 
             if (findings.size() > maxRecords) {
                 findings = findings.subList(0, maxRecords);
             }
-
-            final long endTime = System.currentTimeMillis();
-
-            final HashMap<String, Object> response = new HashMap<>();
-
-            response.put("timeToScan", endTime - startTime);
-            response.put("numFindingsInDatabase", findings.size());
-            response.put("services", findings.toString());
-
-            return ResponseEntity.ok().body(response);
+            
+            return ResponseEntity.ok().body(findings);
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(400).body(e);

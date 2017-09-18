@@ -1,6 +1,8 @@
 package com.moba11y.ioserver;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,17 +20,31 @@ public class UserController {
 
     @Repository
     private static class UserRepository extends HbaseRepository<User> {
+
+        private final byte[] familyBytes = User.class.getSimpleName().getBytes();
+
         UserRepository() {
             super(User.class);
         }
 
-        @Override
-        protected byte[] generateRowKey(User value) {
-            return DigestUtils.md5Hex(value.getEmail().getBytes()).getBytes();
+        private static byte[] rowKey(final String username) {
+            return DigestUtils.md5Hex(username.getBytes()).getBytes();
         }
 
-        protected String getSchemaVersion() {
-            return "1.0";
+        @Override
+        protected Put contsructPut(User value) {
+            Put put = new Put(rowKey(value.email));
+
+            put.addColumn(familyBytes, null, value.toJson().getBytes());
+
+            return put;
+        }
+
+        @Override
+        protected User constructValue(Result result) {
+            //TODO: Make this return a newly constructed user from the result object
+            final String jsonString = new String(result.value());
+            return (User)GsonSerializable.fromJson(jsonString, User.class);
         }
     }
 
@@ -42,7 +58,7 @@ public class UserController {
 
     @RequestMapping(method = RequestMethod.GET, value = "/user")
     public ResponseEntity getUser(@RequestParam final String email) throws IOException {
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(repository.get(UserRepository.rowKey(email)));
     }
 
     /**
@@ -55,23 +71,13 @@ public class UserController {
     public ResponseEntity getUsers(@RequestParam(required = false, defaultValue = "100", value = "maxRecords") final int maxRecords) {
         try {
 
-            final long startTime = System.currentTimeMillis();
-
-            List<User> findings = repository.getFindings(new User());
+            List<User> findings = repository.getValues();
 
             if (findings.size() > maxRecords) {
                 findings = findings.subList(0, maxRecords);
             }
 
-            final long endTime = System.currentTimeMillis();
-
-            final HashMap<String, Object> response = new HashMap<>();
-
-            response.put("timeToScan", endTime - startTime);
-            response.put("numFindingsInDatabase", findings.size());
-            response.put("findings", findings.toString());
-
-            return ResponseEntity.ok().body(response);
+            return ResponseEntity.ok().body(findings);
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(400).body(e);
